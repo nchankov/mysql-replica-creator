@@ -61,7 +61,7 @@ REPLICA_PASS - the password for the user
 ```
 All other variables are optional and have default values.
 
-3. Make the script mysql.X.sh executable (it should be already executable, but just in case)
+3. Make the script mysql.8.sh executable (it should be already executable, but just in case)
 
 4. Run the script and read the status messages:
 ```bash
