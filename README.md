@@ -26,11 +26,16 @@ Also both servers should have the same mysql version. The script would check for
 don't match.
 
 Once the script is sure it has the correct access the synchronization starts.
+
 If the server is a master mysql server, then the script will lock it as read-only mode during the copying of the data.
+
 If the server is a replica server, the script will stop the replication and then start it again after the synchronization 
 is done.
+
 The script will copy the data (from mysql data dir) from the RS to the LS using rsync.
+
 Once the sync is done, the script will start the RS replication again (or if it's a master server, it will unlock it).
+
 Then the script will set the replication connection to the RS and start the replication on the LS.
 
 So if the script is using a master server, the replica would be linked directly to it. 
