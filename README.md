@@ -6,33 +6,34 @@ The script is useful if there is a need a replica server to be created. The scri
 Synchronization, which is very fast and efficient.
 
 ## Terms
-- Remote server (RS) - the server from which the data will be copied. It should be an existing mysql server. The server could 
-  be a master mysql server or an existing replica server. If the server is a master server. The script will lock it as 
+- Remote server (RS) - the server from which the data will be copied. It should be an existing mysql server. The server 
+  could be a master server or an existing replica server. If the server is a master server, the script will lock it as 
   read-only mode during the copying of the data. If this would block the work of your application, concider the time 
-  when the script is run (e.g. when it's off the office hours).
+  when the script is run (e.g. when it's off the office hours). If the server is a replica server, the script will just
+  stop the replication during the copying of the data and then start it again. In this case only concider disabling the 
+  server from the application during the copying of the data as the data wouldn't be fresh.
 
-- Local server (LS) - the server on which the script is run (it should have an empty mysql server installed, or the data in 
-  it would be replaced with the data from the remote server).
+- Local server (LS) - the server on which the script is run (it should have an empty mysql server installed, or the data 
+  in it would be replaced with the data from the remote server).
 
 ## Explanation how the script is set to work
 The LS shuld have passwordless ssh access to the RS. 
-Both servers should have passwordless access to mysql. This means when running 
-```bash
-mysql -u root
-```
-it should not ask for a password.
+
+Both servers should have passwordless access to mysql.
 
 Also both servers should have the same mysql version. The script would check for the correct version and stop if they 
 don't match.
 
-Once the script is sure it has the correct access the synchronization starts.
+Once the script checks are passed the synchronization could start.
+
+The script will take the master position and file of the remote server, which later would be used to set the replication
 
 If the server is a master mysql server, then the script will lock it as read-only mode during the copying of the data.
 
-If the server is a replica server, the script will stop the replication and then start it again after the synchronization 
-is done.
+If the server is a replica server, the script will stop the replication and then start it again after the 
+synchronization is done.
 
-The script will copy the data (from mysql data dir) from the RS to the LS using rsync.
+The script will copy the data (from the mysql data dir) from the RS to the LS using rsync command.
 
 Once the sync is done, the script will start the RS replication again (or if it's a master server, it will unlock it).
 
@@ -59,11 +60,13 @@ git clone git@github.com:nchankov/mysql-sync.git
 ```
 
 2. rename .env.example to .env and set at least the following variables:
+
 ```bash
 REMOTE_IP    - the server from which the data will be copied
 REPLICA_USER - the user which will be used to connect to the remote server
 REPLICA_PASS - the password for the user
 ```
+
 All other variables are optional and have default values.
 
 3. Make the script mysql.8.sh executable (it should be already executable, but just in case)
