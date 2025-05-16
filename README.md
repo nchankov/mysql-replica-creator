@@ -1,6 +1,6 @@
 # Mysql-Replica-Creator
 
-Quick Mysql Synchronization script
+Quick Mysql Replica Creator script
 
 ## Description
 The script is useful if there is a need a replica server to be created. The script is using the rsync methof of 
