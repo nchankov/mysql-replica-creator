@@ -1,4 +1,5 @@
-# mysql-sync
+# Mysql-Replica-Creator
+
 Quick Mysql Synchronization script
 
 ## Description
@@ -56,7 +57,7 @@ The server should have the following packages installed:
 1. Clone the repository (or Download it as a zip file) into the server which would become the replica server.:
 
 ```bash
-git clone git@github.com:nchankov/mysql-sync.git
+git clone git@github.com:nchankov/mysql-replica-creator.git
 ```
 
 2. rename .env.example to .env and set at least the following variables:
