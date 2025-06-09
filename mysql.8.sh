@@ -4,10 +4,12 @@
 # MySQL Replication Setup Script                             #
 #============================================================#
 
+DIR=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd)
+
 #load the configuration from the .env file
-if [ -f .env ]; then
+if [ -f $DIR/.env ]; then
     set -o allexport
-    source .env
+    source $DIR/.env
     set +o allexport
 else
     echo "❌ .env file not found. Please create it from the .env.example file."
@@ -66,46 +68,50 @@ echo ""
 echo "✅ Checks are complete. Starting the syncronization process..."
 echo ""
 
-#Sleep for 5 seconds to give the user time to read the checks
-sleep 5
-
 # Start the script
 echo "🚀 Starting replica setup on $(hostname) from $SOURCE_SERVER..."
 
 #Preserving the current server id
 CURRENT_SERVER_ID=$(mysql -u "$LOCAL_MYSQL_USER" -e "SELECT @@server_id;" | tail -n 1)
 
-# Step 1: Get binlog position from the replica
-echo "🔒 Getting binlog coordinates from $SOURCE_SERVER..."
-
-# Step 2: Stop the replication on the source replica (if the source server is a replica)
+# Step 1: Stop the replication on the source replica (if the source server is a replica)
 IS_REPLICA=$($SOURCE_SSH "mysql -u \"$REMOTE_MYSQL_USER\" -e \"SHOW REPLICA STATUS\G\"" | grep -c "Source_Host")
 if [ "$IS_REPLICA" -ne 0 ]; then
     echo "🛑 Stopping MySQL replication on the $SOURCE_SERVER..."
     $SOURCE_SSH "mysql -u $REMOTE_MYSQL_USER -e \"STOP REPLICA;\""
 else
-    echo "🔒 Setting the $SOURCE_SERVER as read only to prevent loss of data. If this is your live mysql server and this would block your application stop the script. The script will continue in 10 seconds..."
-    sleep 10
+    echo ""
+    echo "🔒 Setting the $SOURCE_SERVER as read only to prevent loss of data."
+    echo "⚠️ If this is your live mysql server and this would block your application, stop the script and try it when the load is not high or plan a scheduled maintenince time."
+    echo ""
+    read -p "Do you wish to continue Y|n " answer
+    answer=${answer:-Y}  # Default to Y if empty
+
+    if [[ "$answer" =~ ^[Nn]$ ]]; then
+        echo "The script has been aborted."
+        exit 1
+    fi
     $SOURCE_SSH "mysql -u \"$REMOTE_MYSQL_USER\" -e \"FLUSH TABLES WITH READ LOCK; SET GLOBAL read_only = 1; SET GLOBAL super_read_only = 1;\""
 fi
 
-# Step 3: Get the binlog file and position form the source replica
+# Step 2: Get binlog position from the replica
+echo "✅ Getting binlog coordinates from $SOURCE_SERVER..."
 read -r LOG_FILE <<< $($SOURCE_SSH "mysql -u \"$REMOTE_MYSQL_USER\" -e \"SHOW MASTER STATUS\G\"" | awk '/File:/ {print $2}' | head -n 1)
 read -r LOG_POS <<< $($SOURCE_SSH "mysql -u \"$REMOTE_MYSQL_USER\" -e \"SHOW MASTER STATUS\G\"" | awk '/Position:/ {print $2}' | head -n 1)
 echo "📌 Binlog File: $LOG_FILE, Position: $LOG_POS"
 
-# Step 4: Stop MySQL and clear data dir
+# Step 3: Stop MySQL and clear data dir
 echo "🛑 Stopping MySQL and clearing $LOCAL_DATA_DIR..."
 service mysql stop 
 rm -rf $LOCAL_DATA_DIR/*
 mkdir -p $LOCAL_DATA_DIR
 chown mysql:mysql $LOCAL_DATA_DIR
 
-# Step 5: Rsync from SOURCE HOST to the current server (excluding auto.cnf)
+# Step 4: Rsync from SOURCE HOST to the current server (excluding auto.cnf)
 echo "📦 Rsyncing data from $SOURCE_SERVER (excluding auto.cnf)..."
 rsync -aP -e "ssh -p $REMOTE_SSH_PORT" --quiet --delete --exclude "auto.cnf" root@$REMOTE_IP:$REMOTE_DATA_DIR/ $LOCAL_DATA_DIR/
 
-# Step 6: If the source server is a replica, start the replication on the source server
+# Step 5: If the source server is a replica, start the replication on the source server
 if [ "$IS_REPLICA" -ne 0 ]; then
   echo "✅ Starting back the replication on $SOURCE_SERVER"
   $SOURCE_SSH "mysql -u \"$REMOTE_MYSQL_USER\" -e \"START REPLICA;\""
@@ -114,17 +120,17 @@ else
   $SOURCE_SSH "mysql -u \"$REMOTE_MYSQL_USER\" -e \"SET GLOBAL read_only = 0; SET GLOBAL super_read_only = 0; UNLOCK TABLES;\""
 fi
 
-# Step 7: Start MySQL on the current server
+# Step 6: Start MySQL on the current server
 echo "🔄 Starting MySQL service..."
 chown -R mysql:mysql $LOCAL_DATA_DIR
 service mysql start
 
-# Step 8: Set up replication to the master (DB1)
+# Step 7: Set up replication to the master (DB1)
 echo "⚙️ Configuring replication to $SOURCE_SERVER..."
 
-# Step 9: Set up the server_id (as it's copied from the source server after this)
+# Step 8: Set up the server_id (as it's copied from the source server after this)
 mysql -u "$LOCAL_MYSQL_USER" -e "SET GLOBAL server_id = $CURRENT_SERVER_ID;"
-# Step 10: Set the connection to the source
+# Step 9: Set the connection to the source
 mysql -u "$LOCAL_MYSQL_USER" -e "
   RESET REPLICA ALL;
   CHANGE REPLICATION SOURCE TO 
